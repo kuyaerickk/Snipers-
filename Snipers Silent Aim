@@ -1,0 +1,81 @@
+local plr = game.Players.LocalPlayer
+local mouse = plr:GetMouse()
+local sniper = plr.Character:WaitForChild("Sniper")
+local plrs = game.Players
+local RunService = game:GetService("RunService")
+local weaponfiredevent = game.ReplicatedStorage.WeaponsSystem.Network.WeaponFired
+local weaponhitevent = game.ReplicatedStorage.WeaponsSystem.Network.WeaponHit
+local data, weaponfireddata, weaponhitdata
+
+for i, v in pairs(getgc(true)) do
+    if type(v) == "table" and rawget(v, "aimPoint") then
+        for x, y in pairs(v) do
+            if typeof(y) == "Instance" and y.Name == plr.Name then
+                data = v
+            end
+        end
+    end
+end
+
+weaponfireddata = {
+    ["id"] = data.nextShotId,
+    ["charge"] = data.charge,
+    ["dir"] = (data.aimPoint - data.tipAttach.WorldCFrame.Position).Unit,
+    ["origin"] = data.tipAttach.WorldCFrame.Position
+}
+
+local function GetClosestToCursor()
+    local closestDistance = math.huge
+    local target = nil
+    
+    for index, player in pairs(plrs:GetPlayers()) do
+        if player ~= plr and player.Character and player.Character:FindFirstChild("Head") and player.Character:FindFirstChildOfClass("Humanoid") and player.Character.Humanoid.Health > 0 then
+            local screenPos, visible = workspace.CurrentCamera:WorldToViewportPoint(player.Character.Head.Position)
+        
+            local distance = (Vector2.new(mouse.X, mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
+    
+	        if distance < closestDistance then
+                target = player
+                closestDistance = distance
+            end
+        end
+    end
+    return target
+end
+
+local enemy = GetClosestToCursor()
+
+RunService.Stepped:Connect(function()
+    enemy = GetClosestToCursor()
+
+    data.weaponsSystem.currentWeapon.configValues.ShotCooldown = 0
+
+    weaponhitdata = {
+        ["pid"] = 1,
+        ["part"] = enemy.Character.Head,
+        ["h"] = enemy.Character.Humanoid,
+        ["m"] = Enum.Material.Plastic,
+        ["sid"] = data.nextShotId,
+    }
+end)
+
+local old;
+
+old = hookmetamethod(game, '__namecall', function(this, ...)
+	local args = {...}
+	local method = getnamecallmethod()
+
+    if not checkcaller() and method == "FireServer" then
+        if this.Name == "WeaponFired" then
+            args[2] = weaponfireddata
+        elseif this.Name == "WeaponHit" then
+            args[2]["pid"] = weaponhitdata["pid"]
+            args[2]["part"] = weaponhitdata["part"]
+            args[2]["h"] = weaponhitdata["h"]
+            args[2]["m"] = weaponhitdata["m"]
+            args[2]["sid"] = weaponhitdata["sid"]
+        end
+    end
+  
+	return old(this, unpack(args))
+end)
